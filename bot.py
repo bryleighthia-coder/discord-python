@@ -56,6 +56,55 @@ async def userinfo(interaction: discord.Interaction, member: discord.Member = No
     embed.set_thumbnail(url=target.display_avatar.url)
     await interaction.response.send_message(embed=embed)
 
+import discord
+from discord import app_commands
+from discord.ext import commands
+
+# --- BUTTON VIEW ---
+# This class handles what happens when a button is clicked
+class RoleButtonView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None) # timeout=None makes the buttons work forever
+
+    @discord.ui.button(label="Blue Role", style=discord.ButtonStyle.primary, custom_id="role_blue")
+    async def blue_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        role = discord.utils.get(interaction.guild.roles, name="Blue") # Ensure this role exists!
+        if role in interaction.user.roles:
+            await interaction.user.remove_roles(role)
+            await interaction.response.send_message(f"❌ Removed the {role.name} role.", ephemeral=True)
+        else:
+            await interaction.user.add_roles(role)
+            await interaction.response.send_message(f"✅ Added the {role.name} role!", ephemeral=True)
+
+    @discord.ui.button(label="Red Role", style=discord.ButtonStyle.danger, custom_id="role_red")
+    async def red_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        role = discord.utils.get(interaction.guild.roles, name="Red") # Ensure this role exists!
+        if role in interaction.user.roles:
+            await interaction.user.remove_roles(role)
+            await interaction.response.send_message(f"❌ Removed the {role.name} role.", ephemeral=True)
+        else:
+            await interaction.user.add_roles(role)
+            await interaction.response.send_message(f"✅ Added the {role.name} role!", ephemeral=True)
+
+# --- THE COMMAND TO SEND THE BUTTONS ---
+@bot.tree.command(name="reaction_roles", description="Setup reaction roles with buttons")
+@app_commands.checks.has_permissions(manage_roles=True)
+async def setup_roles(interaction: discord.Interaction):
+    view = RoleButtonView()
+    embed = discord.Embed(
+        title="Get Your Roles!",
+        description="Click the buttons below to add or remove roles.",
+        color=discord.Color.blurple()
+    )
+    await interaction.response.send_message(embed=embed, view=view)
+
+# --- PERSISTENCE (Crucial for Hosting) ---
+# This part makes sure buttons work even after the bot restarts on Railway
+@bot.event
+async def on_ready():
+    bot.add_view(RoleButtonView())
+    print(f"Logged in as {bot.user}")
+
 # --- 5. MODERATION & MANAGEMENT ---
 @bot.tree.command(name="clear", description="Delete messages")
 @app_commands.checks.has_permissions(manage_messages=True)
