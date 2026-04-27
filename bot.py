@@ -6,7 +6,7 @@ import datetime
 import random
 import os
 
-# --- 1. YOUR SPECIFIC ROLE MAP ---
+# --- 1. SETUP: YOUR ROLE ID MAP ---
 ROLE_MAP = {
     # Age Roles
     "minor": 1498429264897376306, 
@@ -24,7 +24,7 @@ ROLE_MAP = {
     "valo": 1498447802051854399
 }
 
-# --- 2. PERSISTENT BUTTON LOGIC ---
+# --- 2. PERSISTENT BUTTONS (ID BASED) ---
 class RoleButton(Button):
     def __init__(self, label, role_id):
         super().__init__(label=label, style=discord.ButtonStyle.secondary, custom_id=f"role_{role_id}")
@@ -33,8 +33,7 @@ class RoleButton(Button):
     async def callback(self, interaction: discord.Interaction):
         role = interaction.guild.get_role(self.role_id)
         if not role:
-            return await interaction.response.send_message("❌ Role not found! Check your IDs.", ephemeral=True)
-
+            return await interaction.response.send_message("❌ Role not found! Check IDs.", ephemeral=True)
         if role in interaction.user.roles:
             await interaction.user.remove_roles(role)
             await interaction.response.send_message(f"Removed **{role.name}**!", ephemeral=True)
@@ -43,30 +42,44 @@ class RoleButton(Button):
             await interaction.response.send_message(f"Added **{role.name}**!", ephemeral=True)
 
 class PersistentRoleView(View):
-    def __init__(self, roles_to_add=None):
+    def __init__(self):
         super().__init__(timeout=None)
-        if roles_to_add:
-            for label, r_id in roles_to_add.items():
-                self.add_item(RoleButton(label=label, role_id=r_id))
-       
-# --- 3. BOT CLASS SETUP ---
+        for name, r_id in ROLE_MAP.items():
+            self.add_item(RoleButton(label=name, role_id=r_id))
+
+# --- 3. PERSISTENT BUTTON (NAME BASED - FOR MEMBER ROLE) ---
+class RoleButtonView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Get Member Role", style=discord.ButtonStyle.primary, custom_id="role_member")
+    async def member_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        role = discord.utils.get(interaction.guild.roles, name="Member") 
+        if not role:
+            return await interaction.response.send_message("❌ Role 'Member' not found!", ephemeral=True)
+        if role in interaction.user.roles:
+            await interaction.user.remove_roles(role)
+            await interaction.response.send_message(f"❌ Removed {role.name}", ephemeral=True)
+        else:
+            await interaction.user.add_roles(role)
+            await interaction.response.send_message(f"✅ Added {role.name}", ephemeral=True)
+
+# --- 4. BOT CLASS SETUP ---
 class MyBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.members = True          # For Welcome & Roles
-        intents.message_content = True  # For !sync and !post_roles
+        intents.message_content = True  # For ! commands
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        self.add_view(PersistentRoleView()) # Buttons work 24/7
+        # This allows buttons to work forever after a restart
+        self.add_view(PersistentRoleView())
+        self.add_view(RoleButtonView())
 
 bot = MyBot()
 
-# --- 4. EVENTS (READY & WELCOME) ---
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user} | Ready for commands")
-
+# --- 5. EVENTS & WELCOME ---
 @bot.event
 async def on_member_join(member):
     channel = discord.utils.get(member.guild.text_channels, name="welcome") or \
@@ -76,37 +89,34 @@ async def on_member_join(member):
         embed.set_thumbnail(url=member.display_avatar.url)
         await channel.send(embed=embed)
 
-# --- 5. SYSTEM COMMANDS ---
+# --- 6. SYSTEM COMMANDS ---
 @bot.command()
 @commands.is_owner()
 async def sync(ctx):
-    try:
-        bot.tree.copy_global_to(guild=ctx.guild)
-        synced = await bot.tree.sync(guild=ctx.guild)
-        await ctx.send(f"✅ Synced {len(synced)} commands instantly!")
-    except Exception as e:
-        await ctx.send(f"❌ Sync failed: {e}")
+    bot.tree.copy_global_to(guild=ctx.guild)
+    synced = await bot.tree.sync(guild=ctx.guild)
+    await ctx.send(f"✅ Synced {len(synced)} commands instantly!")
 
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def post_roles(ctx):
-    await ctx.send("### 📋 Select Your Roles\nClick the buttons below to add or remove roles from your profile.", view=PersistentRoleView())
+    """Posts your Age/Gender/Game role buttons"""
+    await ctx.send("### 📋 Select Your Roles", view=PersistentRoleView())
 
-# --- 6. MODERATION & UTILITY (SLASH COMMANDS) ---
-@bot.tree.command(name="clear", description="Delete messages")
+@bot.tree.command(name="button_roles", description="Post the Member role button")
+@app_commands.checks.has_permissions(manage_roles=True)
+async def rr(interaction: discord.Interaction):
+    await interaction.response.send_message("Click below for the Member role!", view=RoleButtonView())
+
+# --- 7. MODERATION & UTILITY ---
+@bot.tree.command(name="clear", description="Purge messages")
 @app_commands.checks.has_permissions(manage_messages=True)
 async def clear(interaction: discord.Interaction, amount: int):
     await interaction.response.defer(ephemeral=True)
     await interaction.channel.purge(limit=amount)
     await interaction.followup.send(f"🗑️ Deleted {amount} messages.", ephemeral=True)
 
-@bot.tree.command(name="mute", description="Mute a member (minutes)")
-@app_commands.checks.has_permissions(moderate_members=True)
-async def mute(interaction: discord.Interaction, member: discord.Member, minutes: int):
-    await member.timeout(datetime.timedelta(minutes=minutes))
-    await interaction.response.send_message(f"🔇 Muted {member.display_name} for {minutes}m.")
-
-@bot.tree.command(name="embed", description="Send a professional embed")
+@bot.tree.command(name="embed", description="Send a custom embed box")
 @app_commands.checks.has_permissions(manage_messages=True)
 async def embed_cmd(interaction: discord.Interaction, title: str, description: str, image_url: str = None):
     e = discord.Embed(title=title, description=description, color=discord.Color.random())
@@ -114,14 +124,6 @@ async def embed_cmd(interaction: discord.Interaction, title: str, description: s
     await interaction.response.send_message("Sent!", ephemeral=True)
     await interaction.channel.send(embed=e)
 
-@bot.tree.command(name="serverinfo", description="View server stats")
-async def serverinfo(interaction: discord.Interaction):
-    guild = interaction.guild
-    e = discord.Embed(title=f"🏡 {guild.name}", color=discord.Color.blue())
-    e.add_field(name="Members", value=guild.member_count)
-    if guild.icon: e.set_thumbnail(url=guild.icon.url)
-    await interaction.response.send_message(embed=e)
-
-# --- 7. RUN ---
+# --- 8. RUN THE BOT ---
 token = os.getenv('DISCORD_TOKEN')
 bot.run(token)
