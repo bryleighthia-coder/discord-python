@@ -1,48 +1,46 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-import random
+import os
 
-# --- BOT SETUP ---
+# 1. SETUP: Enable necessary permissions
 intents = discord.Intents.default()
-intents.message_content = True # Needed for prefix commands like !sync
+intents.message_content = True  # Required to read the !sync command
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# --- SLASH COMMANDS ---
+# 2. INSTANT SYNC COMMAND: Type !sync in your server to push updates
+@bot.command()
+@commands.is_owner() # Only you can run this
+async def sync(ctx):
+    try:
+        # Syncs specifically to the server you're in for INSTANT results
+        bot.tree.copy_global_to(guild=ctx.guild)
+        synced = await bot.tree.sync(guild=ctx.guild)
+        await ctx.send(f"✅ Success! Synced {len(synced)} commands to this server instantly.")
+    except Exception as e:
+        await ctx.send(f"❌ Sync failed: {e}")
 
-# 1. Echo Command (Repeat after me)
-@bot.tree.command(name="echo", description="Repeats your message")
+# 3. EXAMPLE COMMANDS
+@bot.tree.command(name="ping", description="Check bot speed")
+async def ping(interaction: discord.Interaction):
+    # Always use 'response.send_message' for the FIRST reply
+    await interaction.response.send_message(f"🏓 Pong! Latency: {round(bot.latency * 1000)}ms")
+
+@bot.tree.command(name="echo", description="Bot repeats your words")
 async def echo(interaction: discord.Interaction, message: str):
-    await interaction.response.send_message(f"Bot says: {message}")
+    await interaction.response.send_message(f"You said: {message}")
 
-# 2. Roll Command (Random number)
-@bot.tree.command(name="roll", description="Roll a dice (default 1-6)")
-async def roll(interaction: discord.Interaction, max_num: int = 6):
-    result = random.randint(1, max_num)
-    await interaction.response.send_message(f"🎲 You rolled a {result}!")
-
-# 3. Avatar Command (See someone's profile picture)
-@bot.tree.command(name="avatar", description="Get a user's avatar")
-async def avatar(interaction: discord.Interaction, member: discord.Member = None):
-    member = member or interaction.user
-    await interaction.response.send_message(member.display_avatar.url)
-
-# 4. Clear Command (Moderation - Delete messages)
-@bot.tree.command(name="clear", description="Delete a number of messages")
+@bot.tree.command(name="clear", description="Deletes messages (Requires Manage Messages)")
 @app_commands.checks.has_permissions(manage_messages=True)
 async def clear(interaction: discord.Interaction, amount: int):
-    await interaction.response.defer(ephemeral=True) # "Bot is thinking..."
+    # DEFER prevents the "application did not respond" error for slow tasks
+    await interaction.response.defer(ephemeral=True)
     deleted = await interaction.channel.purge(limit=amount)
-    await interaction.followup.send(f"Successfully deleted {len(deleted)} messages.", ephemeral=True)
+    await interaction.followup.send(f"🗑️ Deleted {len(deleted)} messages.", ephemeral=True)
 
-# --- THE SYNC COMMAND (IMPORTANT) ---
-# Type !sync in your server to make these new commands show up in the / menu
-@bot.command()
-@commands.is_owner()
-async def sync(ctx):
-    await bot.tree.sync()
-    await ctx.send("Commands synced globally! (May take up to an hour to appear everywhere)")
-
-# --- RUN THE BOT ---
-import os
-bot.run(os.getenv('DISCORD_TOKEN'))
+# 4. RUN: Railway automatically provides the token via Environment Variables
+token = os.getenv('DISCORD_TOKEN')
+if token:
+    bot.run(token)
+else:
+    print("CRITICAL ERROR: 'DISCORD_TOKEN' variable not found in Railway settings!")
