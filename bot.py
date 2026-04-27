@@ -24,7 +24,7 @@ ROLE_MAP = {
     "valo": 1498447802051854399
 }
 
-# --- 2. PERSISTENT BUTTON CLASSES ---
+# --- 2. PERSISTENT BUTTON LOGIC ---
 class RoleButton(Button):
     def __init__(self, label, role_id):
         super().__init__(label=label, style=discord.ButtonStyle.secondary, custom_id=f"role_{role_id}")
@@ -37,17 +37,18 @@ class RoleButton(Button):
 
         if role in interaction.user.roles:
             await interaction.user.remove_roles(role)
-            await interaction.response.send_message(f"Removed the **{role.name}** role!", ephemeral=True)
+            await interaction.response.send_message(f"Removed **{role.name}**!", ephemeral=True)
         else:
             await interaction.user.add_roles(role)
-            await interaction.response.send_message(f"Added the **{role.name}** role!", ephemeral=True)
+            await interaction.response.send_message(f"Added **{role.name}**!", ephemeral=True)
 
 class PersistentRoleView(View):
-    def __init__(self):
+    def __init__(self, roles_to_add=None):
         super().__init__(timeout=None)
-        for name, r_id in ROLE_MAP.items():
-            self.add_item(RoleButton(label=name, role_id=r_id))
-
+        if roles_to_add:
+            for label, r_id in roles_to_add.items():
+                self.add_item(RoleButton(label=label, role_id=r_id))
+       
 # --- 3. BOT CLASS SETUP ---
 class MyBot(commands.Bot):
     def __init__(self):
