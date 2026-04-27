@@ -13,30 +13,70 @@ ROLE_MAP = {
     "Gaming": 1498447507607519303, 1498447571700683024, 1498447635512819942, 1498447694367162378, 1498447748608036975, 1498447802051854399
 }
 
-# --- 2. PERSISTENT BUTTON CLASSES ---
+import discord
+from discord.ext import commands
+from discord.ui import Button, View
+
+# I've mapped your IDs here. 
+# FEEL FREE TO RENAME THE LABELS (the text in quotes) to match your roles!
+ROLE_MAP = {
+    # Age Roles
+    "minor": 1498429264897376306, 
+    "legal": 1498446891757600828,
+    
+    # Gender Roles
+    "male": 1498447053125193759, 
+    "female": 1498447127930470471, 
+    "non-binary": 1498447330053980170,
+    
+    # Gaming Roles
+    "genshin": 1498447507607519303, 
+    "minecraft": 1498447571700683024, 
+    "roblox": 1498447635512819942, 
+    "among us": 1498447694367162378, 
+    "codm": 1498447748608036975, 
+    "valo": 1498447802051854399
+}
+
 class RoleButton(Button):
-    def __init__(self, label, role_id, style):
-        # custom_id is key for buttons to work after a bot reboot
-        super().__init__(label=label, style=style, custom_id=f"role_{role_id}")
+    def __init__(self, label, role_id):
+        super().__init__(label=label, style=discord.ButtonStyle.secondary, custom_id=f"role_{role_id}")
         self.role_id = role_id
 
     async def callback(self, interaction: discord.Interaction):
         role = interaction.guild.get_role(self.role_id)
         if not role:
-            return await interaction.response.send_message("❌ Role not found! Check your IDs.", ephemeral=True)
+            return await interaction.response.send_message("Role not found!", ephemeral=True)
 
         if role in interaction.user.roles:
             await interaction.user.remove_roles(role)
-            await interaction.response.send_message(f"❌ Removed {role.name}!", ephemeral=True)
+            await interaction.response.send_message(f"Removed the **{role.name}** role!", ephemeral=True)
         else:
             await interaction.user.add_roles(role)
-            await interaction.response.send_message(f"✅ Added {role.name}!", ephemeral=True)
+            await interaction.response.send_message(f"Added the **{role.name}** role!", ephemeral=True)
 
 class PersistentRoleView(View):
     def __init__(self):
         super().__init__(timeout=None)
         for name, r_id in ROLE_MAP.items():
-            self.add_item(RoleButton(label=name, role_id=r_id, style=discord.ButtonStyle.primary))
+            self.add_item(RoleButton(label=name, role_id=r_id))
+
+class MyBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.default()
+        intents.members = True 
+        super().__init__(command_prefix="!", intents=intents)
+
+    async def setup_hook(self):
+        self.add_view(PersistentRoleView())
+
+bot = MyBot()
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def post_roles(ctx):
+    """Run !post_roles in Discord to see the buttons"""
+    await ctx.send("### 📋 Select Your Roles\nClick the buttons below to add or remove roles from your profile.", view=PersistentRoleView())
 
 # --- 3. BOT CLASS SETUP ---
 class MyBot(commands.Bot):
